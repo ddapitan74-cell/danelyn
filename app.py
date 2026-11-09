@@ -1,18 +1,38 @@
 # app.py
+import os
+import subprocess
+import sys
+
 import streamlit as st
 import pandas as pd
 import joblib
+
+BASE = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE, "student_model.pkl")
+DATA_PATH = os.path.join(BASE, "student_data.csv")
+
+# If the model or data file is missing, run train_model.py automatically.
+if not (os.path.exists(MODEL_PATH) and os.path.exists(DATA_PATH)):
+    with st.spinner("First run: downloading data and training the model..."):
+        result = subprocess.run(
+            [sys.executable, "train_model.py"],
+            cwd=BASE, capture_output=True, text=True,
+        )
+    if result.returncode != 0:
+        st.error("Training failed. Details below.")
+        st.code(result.stdout + "\n" + result.stderr)
+        st.stop()
 
 st.set_page_config(page_title="Student Predict", page_icon="🎓", layout="wide")
 
 
 @st.cache_resource
 def load_model():
-    return joblib.load("student_model.pkl")
+    return joblib.load(MODEL_PATH)
 
 
 model = load_model()
-data = pd.read_csv("student_data.csv")
+data = pd.read_csv(DATA_PATH)
 
 st.title("🎓 Student Performance Prediction")
 st.caption("Classroom prototype for academic risk exploration")
@@ -23,7 +43,7 @@ c2.metric("Average final grade", round(data["G3"].mean(), 2))
 c3.metric("Historical at-risk records", int((data["G3"] < 10).sum()))
 
 st.subheader("Dataset preview")
-st.dataframe(data.head(10), use_container_width=True)
+st.dataframe(data.head(10), width="stretch")
 
 st.subheader("Predict uploaded student records")
 st.write("Upload a CSV containing the same predictor columns as the training data.")
@@ -52,7 +72,7 @@ if uploaded is not None:
             "AT RISK" if value == 1 else "NOT AT RISK" for value in predictions
         ]
         st.subheader("Prediction results")
-        st.dataframe(results, use_container_width=True)
+        st.dataframe(results, width="stretch")
         st.metric("Predicted at-risk records", int((predictions == 1).sum()))
         st.download_button(
             "Download prediction results",
